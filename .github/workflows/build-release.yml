@@ -61,7 +61,7 @@ jobs:
 
       # ── vcpkg ──────────────────────────────────────────────────
       - name: 📦 Setup vcpkg
-        uses: lukka/run-vcpkg@v11
+        uses: lukka/run-vcpkg@v10
         with:
           vcpkgGitCommitId: '3fd2b6b8a64b0c5c9e5d8c0e6d5c8a9b7f6e5d4c'
 
@@ -235,7 +235,7 @@ jobs:
           arch: x86
 
       - name: 📦 Setup vcpkg
-        uses: lukka/run-vcpkg@v11
+        uses: lukka/run-vcpkg@v10
         with:
           vcpkgGitCommitId: '3fd2b6b8a64b0c5c9e5d8c0e6d5c8a9b7f6e5d4c'
 
