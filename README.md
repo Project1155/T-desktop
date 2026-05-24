@@ -11,7 +11,7 @@
   <img src="https://img.shields.io/badge/WebView2-0078D6?style=for-the-badge&logo=microsoftedge&logoColor=white" />
   <img src="https://img.shields.io/badge/MPV-663399?style=for-the-badge&logoColor=white" />
   <img src="https://img.shields.io/badge/Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white" />
-  <img src="https://img.shields.io/badge/Theme-FF7800?style=for-the-badge&logo=firefoxbrowser&logoColor=white" />
+  <img src="https://github.com/Project1155/T-desktop/actions/workflows/build.yml/badge.svg" />
 </p>
 
 ---
@@ -44,6 +44,19 @@ Go to [**Releases**](../../releases) and download the latest:
 
 ---
 
+## 🚀 Release a New Version (Easiest Way)
+
+Just push a new tag — GitHub Actions builds everything automatically:
+
+```bash
+git tag v5.0.22
+git push origin v5.0.22
+```
+
+Done ✅ — the workflow builds x64 + x86, creates installers, and publishes a GitHub Release.
+
+---
+
 ## 🏗️ Build from Source
 
 ### Prerequisites (Windows)
@@ -57,23 +70,38 @@ Go to [**Releases**](../../releases) and download the latest:
 
 ```powershell
 # 1. Clone
-git clone https://github.com/YourOrg/darkflix-desktop
-cd darkflix-desktop
+git clone https://github.com/Project1155/T-desktop
+cd T-desktop
 
-# 2. Install vcpkg deps
+# 2. Configure git (prevents vcpkg error 128)
+git config --global core.longpaths true
+git config --global http.postBuffer 524288000
+
+# 3. Install vcpkg deps
 vcpkg install openssl:x64-windows-static curl:x64-windows-static nlohmann-json:x64-windows-static unofficial-webview2:x64-windows-static
 
-# 3. Download libmpv and discord-rpc into deps/
-
 # 4. Configure & build
-cmake -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=<vcpkg>/scripts/buildsystems/vcpkg.cmake -DVCPKG_TARGET_TRIPLET=x64-windows-static -B cmake-build-release-x64 -S .
-cmake --build cmake-build-release-x64 --parallel
+cmake -G Ninja -DCMAKE_BUILD_TYPE=Release `
+  -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT\scripts\buildsystems\vcpkg.cmake" `
+  -DVCPKG_TARGET_TRIPLET=x64-windows-static `
+  -B cmake-build-x64 -S .
+cmake --build cmake-build-x64 --parallel
 
 # 5. (Optional) Create installer
 node build/deploy_windows.js --installer
 ```
 
-> **Tip:** Push a tag `v5.0.21` to trigger the GitHub Actions workflow and get a full release automatically!
+---
+
+## 🐛 Known CI Fix
+
+If you see **`error code 128`** in the "Setup vcpkg" step on GitHub Actions, it means git failed to clone a dependency. The workflow now includes these fixes automatically:
+
+```yaml
+git config --global core.longpaths true
+git config --global http.postBuffer 524288000
+git config --global safe.directory "*"
+```
 
 ---
 

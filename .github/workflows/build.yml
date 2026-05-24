@@ -1,0 +1,126 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - arch: x64
+            triplet: x64-windows-static
+            generator_platform: x64
+          - arch: x86
+            triplet: x86-windows-static
+            generator_platform: Win32
+
+    name: Build ${{ matrix.arch }}
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.arch }}
+
+      # ── vcpkg FIX: configure git safe.directory + increase buffer ──
+      - name: Configure git for vcpkg
+        shell: bash
+        run: |
+          git config --global core.longpaths true
+          git config --global http.postBuffer 524288000
+          git config --global safe.directory "*"
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v10
+        with:
+          vcpkgGitCommitId: "b2cb0da531c2f1f740045bfe7c4dac59f0b2d5b0"
+          runVcpkgInstall: true
+        env:
+          VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
+
+      - name: Install vcpkg dependencies
+        shell: cmd
+        run: |
+          vcpkg install openssl:${{ matrix.triplet }} curl:${{ matrix.triplet }} nlohmann-json:${{ matrix.triplet }} unofficial-webview2:${{ matrix.triplet }}
+
+      - name: Download libmpv
+        shell: pwsh
+        run: |
+          $arch = "${{ matrix.arch }}"
+          $url = if ($arch -eq "x64") {
+            "https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20240101/mpv-dev-x86_64-20240101-git-PLACEHOLDER.7z"
+          } else {
+            "https://github.com/shinchiro/mpv-winbuild-cmake/releases/download/20240101/mpv-dev-i686-20240101-git-PLACEHOLDER.7z"
+          }
+          # Use pre-bundled deps if they exist, otherwise skip
+          if (Test-Path "deps/libmpv") {
+            Write-Host "libmpv already bundled."
+          } else {
+            Write-Host "WARNING: deps/libmpv not found - add it to your repo or this step will fail."
+          }
+
+      - name: Configure CMake
+        shell: cmd
+        run: |
+          cmake -G "Ninja" ^
+            -DCMAKE_BUILD_TYPE=Release ^
+            -DCMAKE_TOOLCHAIN_FILE="%VCPKG_ROOT%\scripts\buildsystems\vcpkg.cmake" ^
+            -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} ^
+            -B cmake-build-${{ matrix.arch }} ^
+            -S .
+
+      - name: Build
+        shell: cmd
+        run: cmake --build cmake-build-${{ matrix.arch }} --parallel --config Release
+
+      - name: Create Installer
+        shell: cmd
+        run: node build/deploy_windows.js --installer --arch ${{ matrix.arch }} --version ${{ steps.version.outputs.tag }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: darkflix-${{ matrix.arch }}-${{ steps.version.outputs.tag }}
+          path: |
+            cmake-build-${{ matrix.arch }}/DarkFlix*.exe
+            cmake-build-${{ matrix.arch }}/darkflix.exe
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+
+      - name: Get version
+        id: version
+        run: echo "tag=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref }}
+          name: "DarkFlix v${{ steps.version.outputs.tag }}"
+          draft: false
+          prerelease: false
+          files: dist/**/*
